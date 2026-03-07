@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         Importar Calificaciones - Educarecuador (Con Resaltado Naranja)
 // @namespace    http://tampermonkey.net/
-// @version      15.4
-// @description  Importar automático con resaltado naranja de filas
+// @version      18.0
+// @description  Importar automático - Modo Seguro Clipboard + Limpia Portapapeles al Finalizar + Solo Toast NO MIGRADOS
 // @author       Tú
-// @match        https://academico.educarecuador.gob.ec/  *
+// @match        https://academico.educarecuador.gob.ec/    *
 // @match        *://*.educarecuador.gob.ec/*
 // @grant        none
 // @run-at       document-end
@@ -13,7 +13,7 @@
 (function() {
     'use strict';
 
-    console.log('🚀 Script v15.4 - Resaltado Naranja Activo');
+    console.log('🚀 Script v18.0 - Limpia Clipboard al Finalizar + Seguridad');
 
     // ==========================================
     // VARIABLES GLOBALES
@@ -27,6 +27,7 @@
     let autoPaginacionActiva = false;
     let contadorMigrados = 0;
     let contadorNoMigrados = 0;
+    let datosInternos = null;
 
     // ==========================================
     // ARRASTRAR PANEL
@@ -88,8 +89,8 @@
                     margin-bottom: 15px; cursor: move; padding: 10px;
                     background: rgba(255,255,255,0.2); border-radius: 8px;
                 ">
-                    <h3 style="margin: 0; font-size: 16px; user-select: none;">
-                        📊 Importador Calificaciones
+                    <h3 style="margin: 0; font-size: 16px; user-select: none; color: white;">
+                        📊 Importador de Calificaciones
                     </h3>
                     <div style="display:flex;gap:5px;">
                         <button id="btnReset" title="Limpiar" style="
@@ -102,25 +103,19 @@
                 </div>
 
                 <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 12px; line-height: 1.5;">
-                    <strong>📋 Instrucciones:</strong><br>
-                    1. Pegue lo copiado de www.webprosistem.com<br>
-                    2. Click en "▶️ INICIAR"<br>
-                    3. El script hace todo automáticamente
+                    <strong>🔐 Modo Seguro:</strong><br>
+                    1. Copie los datos de www.webprosistem.com<br>
+                    2. Haga clic en "▶️ INICIAR IMPORTACIÓN"<br>
+                    3. El script leerá directamente de su portapapeles<br>
+                    <small style="opacity:0.8;">💡 Asegúrese de tener los datos copiados antes de iniciar</small>
                 </div>
-
-                <textarea id="datosCalificaciones"
-                    placeholder='[{"cedula":"1727343376","estudiante":"NOMBRE","nota":9.53}]'
-                    style="width: 100%; height: 80px; padding: 10px;
-                    border: 2px solid rgba(255,255,255,0.3); border-radius: 8px;
-                    font-family: monospace; font-size: 11px; resize: vertical;
-                    box-sizing: border-box; margin-bottom: 15px;"></textarea>
 
                 <button id="btnIniciarImport" style="
                     width: 100%; padding: 14px; background: #10b981;
                     color: white; border: none; border-radius: 8px;
                     font-weight: bold; font-size: 15px; cursor: pointer;
                     margin-bottom: 10px;">
-                    ▶️ INICIAR IMPORTACIÓN
+                    ▶️ INICIAR
                 </button>
 
                 <button id="btnContinuar" style="
@@ -193,20 +188,27 @@
         if (btnFinalizar) btnFinalizar.onclick = forzarLimpieza;
 
         setTimeout(hacerArrastrable, 300);
-        showToast('✅ Panel listo', 'success');
+        showToast('✅ Panel listo - Copie datos antes de iniciar', 'success');
     }
 
     // ==========================================
-    // TOAST NOTIFICATION
+    // TOAST NOTIFICATION - Top-Right Stacking
     // ==========================================
     function showToast(mensaje, tipo = 'info') {
         const toast = document.createElement('div');
+
+        // Calcular posición para stacking en esquina superior derecha
+        const existingToasts = document.querySelectorAll('.toast-nm');
+        const topOffset = 20 + (existingToasts.length * 55);
+
+        toast.className = 'toast-nm';
         toast.style.cssText = `
-            position: fixed; top: 20px; left: 50%;
-            transform: translateX(-50%); z-index: 100000;
-            padding: 12px 24px; border-radius: 8px;
+            position: fixed; top: ${topOffset}px; right: 20px;
+            z-index: 100000; padding: 12px 24px; border-radius: 8px;
             color: white; font-weight: bold; font-size: 13px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transition: all 0.3s ease; opacity: 0; transform: translateX(50px);
+            max-width: 350px; word-wrap: break-word;
         `;
 
         if (tipo === 'success') toast.style.background = '#10b981';
@@ -217,11 +219,28 @@
         toast.textContent = mensaje;
         document.body.appendChild(toast);
 
+        // Animación de entrada
+        requestAnimationFrame(() => {
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateX(0)';
+        });
+
         setTimeout(() => {
             toast.style.opacity = '0';
-            toast.style.transition = 'opacity 0.3s';
-            setTimeout(() => toast.remove(), 300);
+            toast.style.transform = 'translateX(50px)';
+            setTimeout(() => {
+                toast.remove();
+                reajustarToasts();
+            }, 300);
         }, 4000);
+    }
+
+    // Función auxiliar para reajustar posición de toasts cuando uno desaparece
+    function reajustarToasts() {
+        const toasts = document.querySelectorAll('.toast-nm');
+        toasts.forEach((toast, index) => {
+            toast.style.top = (20 + index * 55) + 'px';
+        });
     }
 
     // ==========================================
@@ -293,11 +312,25 @@
     }
 
     // ==========================================
-    // INICIAR IMPORTACIÓN
+    // INICIAR IMPORTACIÓN - MODO SEGURO CLIPBOARD
     // ==========================================
     async function iniciarImportacionAuto() {
-        const texto = document.getElementById('datosCalificaciones').value.trim();
-        if (!texto) { showToast('❌ Pega los datos primero', 'error'); return; }
+        let texto = '';
+
+        // 🔐 INTENTO 1: Leer directamente del portapapeles (más seguro)
+        try {
+            if (navigator.clipboard && navigator.clipboard.readText) {
+                texto = await navigator.clipboard.readText();
+                console.log('🔐 Datos leídos directamente del portapapeles');
+            }
+        } catch (e) {
+            console.log('⚠️ No se pudo leer del portapapeles:', e.message);
+        }
+
+        if (!texto || texto.trim() === '') {
+            showToast('❌ Copie las calificaciones de www.webprosistem.com antes de iniciar', 'error');
+            return;
+        }
 
         try {
             calificaciones = JSON.parse(texto);
@@ -327,9 +360,9 @@
         document.getElementById('progresoContainer').style.display = 'block';
 
         actualizarBarraProgreso(0, calificaciones.length);
-        actualizarEstado('🚀 Iniciando...', 'escribiendo');
+        actualizarEstado('🔐 Datos cargados - Iniciando...', 'escribiendo');
 
-        showToast(`🚀 Iniciando: ${calificaciones.length} registros`, 'info');
+        showToast(`🚀 Iniciando: ${calificaciones.length} registros (modo seguro)`, 'info');
 
         await procesarLoteAuto();
     }
@@ -358,11 +391,10 @@
                     if (resultado.exito) {
                         filasPendientesGuardar.push(resultado.fila);
                         contadorMigrados++;
-                        // ✅ TOAST VERDE - MIGRADO (sin espera)
-                        showToast(`✅ MIGRADO: ${est.estudiante || cedula}`, 'success');
+                        // ✅ MIGRADO: SIN TOAST (solo se muestra NO MIGRADO)
                     } else {
                         contadorNoMigrados++;
-                        // ❌ TOAST ROJO - NO MIGRADO (sin espera)
+                        // ❌ TOAST ROJO - NO MIGRADO (único que se muestra)
                         showToast(`❌ NO MIGRADO: ${est.estudiante || cedula}`, 'error');
                     }
                 } catch (e) {
@@ -538,7 +570,7 @@
     }
 
     // ==========================================
-    // FINALIZAR
+    // FINALIZAR - CON LIMPIEZA DE PORTAPAPELES ✅
     // ==========================================
     function finalizarImportacionAuto() {
         autoPaginacionActiva = false;
@@ -548,7 +580,25 @@
 
         setTimeout(() => {
             showToast(`✅ COMPLETADO: ${contadorMigrados} migrados, ${contadorNoMigrados} no migrados`, 'success');
+
+            // 🔐 LIMPIAR PORTAPAPELES POR SEGURIDAD
+            limpiarPortapapeles();
         }, 500);
+    }
+
+    // ==========================================
+    // LIMPIAR PORTAPAPELES - NUEVA FUNCIÓN 🔐
+    // ==========================================
+    async function limpiarPortapapeles() {
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText('');
+                console.log('🔐 Portapapeles limpiado por seguridad');
+                showToast('🔒 Portapapeles limpiado - Datos eliminados', 'warning');
+            }
+        } catch (e) {
+            console.log('⚠️ No se pudo limpiar el portapapeles:', e.message);
+        }
     }
 
     // ==========================================
@@ -565,10 +615,7 @@
         filasPendientesGuardar = [];
         contadorMigrados = 0;
         contadorNoMigrados = 0;
-
-        // 🧹 LIMPIAR EL TEXTAREA
-        const textarea = document.getElementById('datosCalificaciones');
-        if (textarea) textarea.value = '';
+        datosInternos = null;
 
         document.getElementById('progresoContainer').style.display = 'none';
         document.getElementById('estadoContainer').style.display = 'none';
