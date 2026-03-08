@@ -1,10 +1,10 @@
 // ==UserScript==
-// @name         Importar Calificaciones - Educarecuador (Con Resaltado Naranja)
+// @name         Importar Calificaciones - Educarecuador (Bootstrap Professional)
 // @namespace    http://tampermonkey.net/
-// @version      18.0
-// @description  Importar automático - Modo Seguro Clipboard + Limpia Portapapeles al Finalizar + Solo Toast NO MIGRADOS
+// @version      19.2
+// @description  Importar automático - Header Gris + Botón Warning Bootstrap + Auto-Close Modal
 // @author       Tú
-// @match        https://academico.educarecuador.gob.ec/    *
+// @match        https://academico.educarecuador.gob.ec/*
 // @match        *://*.educarecuador.gob.ec/*
 // @grant        none
 // @run-at       document-end
@@ -13,7 +13,7 @@
 (function() {
     'use strict';
 
-    console.log('🚀 Script v18.0 - Limpia Clipboard al Finalizar + Seguridad');
+    console.log('🚀 Script v19.2 - Header Gris + Botón Warning Bootstrap');
 
     // ==========================================
     // VARIABLES GLOBALES
@@ -28,6 +28,46 @@
     let contadorMigrados = 0;
     let contadorNoMigrados = 0;
     let datosInternos = null;
+
+    // ==========================================
+    // 🔹 FUNCIÓN AUXILIAR: COMPARAR CÉDULAS
+    // ==========================================
+    function compararCedulas(cedulaBuscada, textoCelda) {
+        if (!cedulaBuscada || !textoCelda) return false;
+
+        const a = cedulaBuscada.toString().replace(/\s+/g, '').trim();
+        const b = textoCelda.toString().replace(/\s+/g, '').trim();
+
+        return a === b && a.length >= 10 && /^\d+[\d\.\-]*$/.test(a);
+    }
+
+    // ==========================================
+    // 🔹 CERRAR MODAL DE CONFIRMACIÓN AUTOMÁTICAMENTE
+    // ==========================================
+    async function cerrarModalConfirmacion() {
+        try {
+            await esperar(500);
+
+            const btnAceptar = Array.from(document.querySelectorAll('button')).find(btn =>
+                (btn.textContent.trim() === 'Aceptar' ||
+                 btn.textContent.trim() === 'OK' ||
+                 btn.textContent.trim() === 'Cerrar') &&
+                btn.offsetParent !== null
+            );
+
+            if (btnAceptar) {
+                console.log('✅ Modal detectado - Cerrando automáticamente...');
+                btnAceptar.click();
+                await esperar(300);
+                return true;
+            }
+
+            return false;
+        } catch (e) {
+            console.warn('⚠️ Error cerrando modal:', e);
+            return false;
+        }
+    }
 
     // ==========================================
     // ARRASTRAR PANEL
@@ -67,7 +107,7 @@
     }
 
     // ==========================================
-    // CREAR PANEL
+    // CREAR PANEL - BOOTSTRAP PROFESSIONAL COLORS
     // ==========================================
     function crearBotonFlotante() {
         if (document.getElementById('importador-educarecuador')) return;
@@ -78,85 +118,122 @@
 
         container.innerHTML = `
             <div style="
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                padding: 20px; border-radius: 15px;
-                box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-                color: white; font-family: Arial, sans-serif;
-                min-width: 400px; max-width: 450px;
+                background: #C8C8C8;
+                border: 1px solid #dee2e6;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                color: #212529; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                min-width: 420px; max-width: 470px;
             ">
+                <!-- HEADER - Bootstrap Secondary (Gris) -->
                 <div id="panelHeader" style="
                     display: flex; justify-content: space-between; align-items: center;
-                    margin-bottom: 15px; cursor: move; padding: 10px;
-                    background: rgba(255,255,255,0.2); border-radius: 8px;
+                    padding: 12px 16px;
+                    background: #adb5bd;
+                    color: white;
+                    border-radius: 8px 8px 0 0;
+                    cursor: move;
                 ">
-                    <h3 style="margin: 0; font-size: 16px; user-select: none; color: white;">
+                    <h3 style="margin: 0; font-size: 16px; font-weight: 600; user-select: none; color: white;">
                         📊 Importador de Calificaciones
                     </h3>
-                    <div style="display:flex;gap:5px;">
+                    <div style="display:flex;gap:6px;">
                         <button id="btnReset" title="Limpiar" style="
-                            background: rgba(239,68,68,0.9); border:none; color:white;
-                            width:28px; height:28px; border-radius:50%; cursor:pointer; font-size:14px;">🧹</button>
+                            background: rgba(255,255,255,0.2); border:none; color:white;
+                            width:30px; height:30px; border-radius:4px; cursor:pointer;
+                            font-size:14px; transition: all 0.2s;"
+                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                            onmouseout="this.style.background='rgba(255,255,255,0.2)'">🧹</button>
                         <button id="btnCerrarPanel" style="
                             background: rgba(255,255,255,0.2); border:none; color:white;
-                            width:28px; height:28px; border-radius:50%; cursor:pointer; font-size:16px;">×</button>
+                            width:30px; height:30px; border-radius:4px; cursor:pointer;
+                            font-size:16px; transition: all 0.2s;"
+                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                            onmouseout="this.style.background='rgba(255,255,255,0.2)'">×</button>
                     </div>
                 </div>
 
-                <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 12px; line-height: 1.5;">
-                    <strong>🔐 Modo Seguro:</strong><br>
-                    1. Copie los datos de www.webprosistem.com<br>
-                    2. Haga clic en "▶️ INICIAR IMPORTACIÓN"<br>
-                    3. El script leerá directamente de su portapapeles<br>
-                    <small style="opacity:0.8;">💡 Asegúrese de tener los datos copiados antes de iniciar</small>
-                </div>
-
-                <button id="btnIniciarImport" style="
-                    width: 100%; padding: 14px; background: #10b981;
-                    color: white; border: none; border-radius: 8px;
-                    font-weight: bold; font-size: 15px; cursor: pointer;
-                    margin-bottom: 10px;">
-                    ▶️ INICIAR
-                </button>
-
-                <button id="btnContinuar" style="
-                    width: 100%; padding: 14px; background: #3b82f6;
-                    color: white; border: none; border-radius: 8px;
-                    font-weight: bold; font-size: 15px; cursor: pointer;
-                    margin-bottom: 10px; display: none;">
-                    ⏭️ CONTINUAR
-                </button>
-
-                <button id="btnFinalizar" style="
-                    width: 100%; padding: 14px; background: #ef4444;
-                    color: white; border: none; border-radius: 8px;
-                    font-weight: bold; font-size: 15px; cursor: pointer;
-                    margin-bottom: 10px; display: none;">
-                    ✅ FINALIZAR
-                </button>
-
-                <!-- BARRA DE PROGRESO -->
-                <div id="progresoContainer" style="display: none; margin-top: 15px;">
-                    <div style="display:flex; justify-content:space-between; margin-bottom:5px; font-size:12px;">
-                        <span id="progresoTexto">Progreso...</span>
-                        <span id="progresoPorcentaje">0%</span>
+                <!-- BODY -->
+                <div style="padding: 20px;">
+                    <!-- Info Box - Bootstrap Info -->
+                    <div style="
+                        background: #fafafa;
+                        border: 1px solid #9ec5fe;
+                        border-left: 4px solid #adb5bd;
+                        padding: 12px; border-radius: 6px;
+                        margin-bottom: 16px; font-size: 13px; line-height: 1.6;
+                        color: #055160;
+                    ">
+                        <strong style="color: #084298;">🔐 Modo Seguro:</strong><br>
+                        1. Copie los datos de www.webprosistem.com<br>
+                        2. Haga clic en "▶️ INICIAR IMPORTACIÓN"<br>
+                        3. El script leerá directamente de su portapapeles<br>
+                        <small style="opacity:0.85;">💡 Asegúrese de tener los datos copiados antes de iniciar</small>
                     </div>
-                    <div style="width:100%;height:12px;background:rgba(255,255,255,0.3);border-radius:6px;overflow:hidden;">
-                        <div id="barraProgreso" style="width:0%;height:100%;background:#10b981;transition:width 0.3s;"></div>
+
+                    <!-- Botón Iniciar - Bootstrap Warning (Amarillo) -->
+                    <button id="btnIniciarImport" style="
+                        width: 100%; padding: 12px;
+                        background: #ffc107;
+                        color: #212529; border: none; border-radius: 6px;
+                        font-weight: 600; font-size: 15px; cursor: pointer;
+                        margin-bottom: 10px;
+                        transition: all 0.2s;
+                        box-shadow: 0 2px 4px rgba(255,193,7,0.2);"
+                        onmouseover="this.style.background='#ffca2c'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 8px rgba(255,193,7,0.3)'"
+                        onmouseout="this.style.background='#ffc107'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 4px rgba(255,193,7,0.2)'">
+                        ▶️ INICIAR IMPORTACIÓN
+                    </button>
+
+                    <!-- Botón Continuar - Bootstrap Primary -->
+                    <button id="btnContinuar" style="
+                        width: 100%; padding: 12px;
+                        background: #0d6efd;
+                        color: white; border: none; border-radius: 6px;
+                        font-weight: 600; font-size: 15px; cursor: pointer;
+                        margin-bottom: 10px; display: none;
+                        transition: all 0.2s;
+                        box-shadow: 0 2px 4px rgba(13,110,253,0.2);"
+                        onmouseover="this.style.background='#0b5ed7'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 8px rgba(13,110,253,0.3)'"
+                        onmouseout="this.style.background='#0d6efd'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 4px rgba(13,110,253,0.2)'">
+                        ⏭️ CONTINUAR
+                    </button>
+
+                    <!-- Botón Finalizar - Bootstrap Danger -->
+                    <button id="btnFinalizar" style="
+                        width: 100%; padding: 12px;
+                        background: #dc3545;
+                        color: white; border: none; border-radius: 6px;
+                        font-weight: 600; font-size: 15px; cursor: pointer;
+                        margin-bottom: 10px; display: none;
+                        transition: all 0.2s;
+                        box-shadow: 0 2px 4px rgba(220,53,69,0.2);"
+                        onmouseover="this.style.background='#bb2d3b'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 8px rgba(220,53,69,0.3)'"
+                        onmouseout="this.style.background='#dc3545'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 4px rgba(220,53,69,0.2)'">
+                        ✅ PROCESO FINALIZADO
+                    </button>
+
+                    <!-- BARRA DE PROGRESO - Bootstrap Progress -->
+                    <div id="progresoContainer" style="display: none; margin-top: 16px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:13px; font-weight:500; color:#495057;">
+                            <span id="progresoTexto">Progreso...</span>
+                            <span id="progresoPorcentaje" style="color:#0d6efd; font-weight:600;">0%</span>
+                        </div>
+                        <div style="width:100%;height:20px;background:#e9ecef;border-radius:10px;overflow:hidden;box-shadow:inset 0 1px 2px rgba(0,0,0,0.1);">
+                            <div id="barraProgreso" style="width:0%;height:100%;background:linear-gradient(90deg, #198754 0%, #20c997 100%);transition:width 0.3s ease;"></div>
+                        </div>
+                    </div>
+
+                    <!-- INDICADOR DE ESTADO - Bootstrap Alerts -->
+                    <div id="estadoContainer" style="
+                        margin-top: 16px; padding: 12px; border-radius: 6px;
+                        font-size: 14px; font-weight: 500; text-align: center;
+                        display: none; transition: all 0.3s ease;
+                        border: 1px solid transparent;
+                    ">
+                        <span id="estadoTexto">Esperando...</span>
                     </div>
                 </div>
-
-                <!-- INDICADOR DE ESTADO CON COLORES -->
-                <div id="estadoContainer" style="
-                    margin-top: 10px; padding: 12px; border-radius: 8px;
-                    font-size: 13px; font-weight: bold; text-align: center;
-                    display: none; transition: all 0.3s ease;
-                    border: 2px solid transparent;
-                ">
-                    <span id="estadoTexto">Esperando...</span>
-                </div>
-
-                <!-- LOG OCULTO -->
-                <div id="logContainer" style="display: none;"></div>
             </div>
         `;
 
@@ -187,39 +264,68 @@
         const btnFinalizar = document.getElementById('btnFinalizar');
         if (btnFinalizar) btnFinalizar.onclick = forzarLimpieza;
 
-        setTimeout(hacerArrastrable, 300);
+        setTimeout(() => {
+            hacerArrastrable();
+        }, 300);
+
         showToast('✅ Panel listo - Copie datos antes de iniciar', 'success');
     }
 
     // ==========================================
-    // TOAST NOTIFICATION - Top-Right Stacking
+    // TOAST NOTIFICATION - Bootstrap Colors
     // ==========================================
     function showToast(mensaje, tipo = 'info') {
         const toast = document.createElement('div');
 
-        // Calcular posición para stacking en esquina superior derecha
         const existingToasts = document.querySelectorAll('.toast-nm');
-        const topOffset = 20 + (existingToasts.length * 55);
+        const topOffset = 20 + (existingToasts.length * 65);
 
         toast.className = 'toast-nm';
+
+        let bgColor, borderColor, textColor, icon;
+
+        switch(tipo) {
+            case 'success':
+                bgColor = '#d1e7dd';
+                borderColor = '#badbcc';
+                textColor = '#0f5132';
+                icon = '✅';
+                break;
+            case 'error':
+                bgColor = '#f8d7da';
+                borderColor = '#f5c2c7';
+                textColor = '#842029';
+                icon = '❌';
+                break;
+            case 'warning':
+                bgColor = '#fff3cd';
+                borderColor = '#ffecb5';
+                textColor = '#664d03';
+                icon = '⚠️';
+                break;
+            default:
+                bgColor = '#cff4fc';
+                borderColor = '#b6effb';
+                textColor = '#055160';
+                icon = 'ℹ️';
+        }
+
         toast.style.cssText = `
             position: fixed; top: ${topOffset}px; right: 20px;
-            z-index: 100000; padding: 12px 24px; border-radius: 8px;
-            color: white; font-weight: bold; font-size: 13px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 100000; padding: 14px 20px; border-radius: 8px;
+            background: ${bgColor};
+            border: 1px solid ${borderColor};
+            color: ${textColor};
+            font-weight: 500; font-size: 14px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             transition: all 0.3s ease; opacity: 0; transform: translateX(50px);
-            max-width: 350px; word-wrap: break-word;
+            max-width: 380px; word-wrap: break-word;
+            display: flex; align-items: center; gap: 10px;
         `;
 
-        if (tipo === 'success') toast.style.background = '#10b981';
-        else if (tipo === 'error') toast.style.background = '#ef4444';
-        else if (tipo === 'warning') toast.style.background = '#f59e0b';
-        else toast.style.background = '#3b82f6';
-
-        toast.textContent = mensaje;
+        toast.innerHTML = `<span style="font-size:18px;">${icon}</span><span>${mensaje}</span>`;
         document.body.appendChild(toast);
 
-        // Animación de entrada
         requestAnimationFrame(() => {
             toast.style.opacity = '1';
             toast.style.transform = 'translateX(0)';
@@ -235,16 +341,15 @@
         }, 4000);
     }
 
-    // Función auxiliar para reajustar posición de toasts cuando uno desaparece
     function reajustarToasts() {
         const toasts = document.querySelectorAll('.toast-nm');
         toasts.forEach((toast, index) => {
-            toast.style.top = (20 + index * 55) + 'px';
+            toast.style.top = (20 + index * 65) + 'px';
         });
     }
 
     // ==========================================
-    // ACTUALIZAR ESTADO CON COLORES
+    // ACTUALIZAR ESTADO - Bootstrap Alert Colors
     // ==========================================
     function actualizarEstado(mensaje, tipo) {
         const estadoContainer = document.getElementById('estadoContainer');
@@ -257,39 +362,39 @@
 
         switch(tipo) {
             case 'escribiendo':
-                estadoContainer.style.background = 'rgba(245, 158, 11, 0.9)';
-                estadoContainer.style.borderColor = '#f59e0b';
-                estadoContainer.style.color = '#ffffff';
+                estadoContainer.style.background = '#fff3cd';
+                estadoContainer.style.borderColor = '#ffecb5';
+                estadoContainer.style.color = '#664d03';
                 break;
             case 'guardando':
-                estadoContainer.style.background = 'rgba(59, 130, 246, 0.9)';
-                estadoContainer.style.borderColor = '#3b82f6';
-                estadoContainer.style.color = '#ffffff';
+                estadoContainer.style.background = '#cfe2ff';
+                estadoContainer.style.borderColor = '#9ec5fe';
+                estadoContainer.style.color = '#084298';
                 break;
             case 'navegando':
-                estadoContainer.style.background = 'rgba(139, 92, 246, 0.9)';
-                estadoContainer.style.borderColor = '#8b5cf6';
-                estadoContainer.style.color = '#ffffff';
+                estadoContainer.style.background = '#e2e3e5';
+                estadoContainer.style.borderColor = '#d3d6d8';
+                estadoContainer.style.color = '#41464b';
                 break;
             case 'success':
-                estadoContainer.style.background = 'rgba(16, 185, 129, 0.9)';
-                estadoContainer.style.borderColor = '#10b981';
-                estadoContainer.style.color = '#ffffff';
+                estadoContainer.style.background = '#d1e7dd';
+                estadoContainer.style.borderColor = '#badbcc';
+                estadoContainer.style.color = '#0f5132';
                 break;
             case 'error':
-                estadoContainer.style.background = 'rgba(239, 68, 68, 0.9)';
-                estadoContainer.style.borderColor = '#ef4444';
-                estadoContainer.style.color = '#ffffff';
+                estadoContainer.style.background = '#f8d7da';
+                estadoContainer.style.borderColor = '#f5c2c7';
+                estadoContainer.style.color = '#842029';
                 break;
             case 'warning':
-                estadoContainer.style.background = 'rgba(251, 191, 36, 0.9)';
-                estadoContainer.style.borderColor = '#fbbf24';
-                estadoContainer.style.color = '#000000';
+                estadoContainer.style.background = '#fff3cd';
+                estadoContainer.style.borderColor = '#ffecb5';
+                estadoContainer.style.color = '#664d03';
                 break;
             default:
-                estadoContainer.style.background = 'rgba(255,255,255,0.2)';
-                estadoContainer.style.borderColor = 'transparent';
-                estadoContainer.style.color = '#ffffff';
+                estadoContainer.style.background = '#e9ecef';
+                estadoContainer.style.borderColor = '#dee2e6';
+                estadoContainer.style.color = '#495057';
         }
     }
 
@@ -312,12 +417,11 @@
     }
 
     // ==========================================
-    // INICIAR IMPORTACIÓN - MODO SEGURO CLIPBOARD
+    // INICIAR IMPORTACIÓN
     // ==========================================
     async function iniciarImportacionAuto() {
         let texto = '';
 
-        // 🔐 INTENTO 1: Leer directamente del portapapeles (más seguro)
         try {
             if (navigator.clipboard && navigator.clipboard.readText) {
                 texto = await navigator.clipboard.readText();
@@ -335,15 +439,25 @@
         try {
             calificaciones = JSON.parse(texto);
         } catch (e) {
-            showToast('❌ Error JSON: ' + e.message, 'error'); return;
+            showToast('❌ Error JSON: ' + e.message, 'error');
+            return;
         }
 
         if (!calificaciones || calificaciones.length === 0) {
-            showToast('❌ No hay datos', 'error'); return;
+            showToast('❌ No hay datos', 'error');
+            return;
         }
         if (!calificaciones[0].cedula) {
-            showToast('❌ Falta campo "cedula"', 'error'); return;
+            showToast('❌ Falta campo "cedula"', 'error');
+            return;
         }
+
+        // Normalizar cédulas al cargar
+        calificaciones = calificaciones.map(est => ({
+            ...est,
+            cedula: (est.cedula || '').toString().replace(/\s+/g, ''),
+            id: (est.id || '').toString().replace(/\s+/g, '')
+        }));
 
         indiceActual = 0;
         paginaActual = 1;
@@ -362,7 +476,7 @@
         actualizarBarraProgreso(0, calificaciones.length);
         actualizarEstado('🔐 Datos cargados - Iniciando...', 'escribiendo');
 
-        showToast(`🚀 Iniciando: ${calificaciones.length} registros (modo seguro)`, 'info');
+        showToast(`🚀 Iniciando: ${calificaciones.length} registros`, 'info');
 
         await procesarLoteAuto();
     }
@@ -377,7 +491,6 @@
         filasPendientesGuardar = [];
 
         try {
-            // ESCRIBIR NOTAS
             actualizarEstado('✏️ Escribiendo notas...', 'escribiendo');
 
             for (let i = indiceActual; i < finLote; i++) {
@@ -391,10 +504,8 @@
                     if (resultado.exito) {
                         filasPendientesGuardar.push(resultado.fila);
                         contadorMigrados++;
-                        // ✅ MIGRADO: SIN TOAST (solo se muestra NO MIGRADO)
                     } else {
                         contadorNoMigrados++;
-                        // ❌ TOAST ROJO - NO MIGRADO (único que se muestra)
                         showToast(`❌ NO MIGRADO: ${est.estudiante || cedula}`, 'error');
                     }
                 } catch (e) {
@@ -408,13 +519,11 @@
                 await esperar(300);
             }
 
-            // GUARDAR
             if (filasPendientesGuardar.length > 0) {
                 actualizarEstado('💾 Guardando registros...', 'guardando');
                 await guardar5RegistrosAuto();
             }
 
-            // VERIFICAR SI TERMINÓ
             if (indiceActual >= calificaciones.length) {
                 actualizarEstado('✅ ¡Completado!', 'success');
                 finalizarImportacionAuto();
@@ -430,29 +539,34 @@
     }
 
     // ==========================================
-    // ESCRIBIR NOTA (CON RESALTADO NARANJA) ✅
+    // ESCRIBIR NOTA (CON RESALTADO BOOTSTRAP)
     // ==========================================
     async function escribirNota(estudiante) {
-        const cedula = estudiante.cedula || estudiante.id;
-
+        const cedulaBuscada = estudiante.cedula || estudiante.id;
         const filas = document.querySelectorAll('table tbody tr');
         let filaEncontrada = null;
 
         for (const fila of filas) {
             if (fila.style.display === 'none' || fila.hidden) continue;
-            if (fila.textContent.includes(cedula)) {
-                filaEncontrada = fila;
-                break;
+
+            const celdas = fila.querySelectorAll('td');
+            for (const td of celdas) {
+                const textoCelda = td.textContent.trim();
+
+                if (compararCedulas(cedulaBuscada, textoCelda)) {
+                    filaEncontrada = fila;
+                    break;
+                }
             }
+            if (filaEncontrada) break;
         }
 
         if (!filaEncontrada) {
-            // ❌ No se encontró la cédula
             return { exito: false, fila: null };
         }
 
-        // 🟠 RESALTAR FILA EN NARANJA MIENTRAS PROCESA
-        filaEncontrada.style.background = 'rgba(255, 165, 0, 0.6)';
+        // 🟡 Bootstrap Warning color
+        filaEncontrada.style.background = '#fff3cd';
         filaEncontrada.style.transition = 'background 0.3s ease';
 
         const inputs = filaEncontrada.querySelectorAll('input[type="text"], input[type="number"]');
@@ -479,14 +593,14 @@
 
         await esperar(200);
 
-        // ✅ CAMBIAR A VERDE CUANDO TERMINA DE ESCRIBIR
-        filaEncontrada.style.background = 'rgba(16, 185, 129, 0.4)';
+        // ✅ Bootstrap Success color
+        filaEncontrada.style.background = '#d1e7dd';
 
         return { exito: true, fila: filaEncontrada, nota: estudiante.nota };
     }
 
     // ==========================================
-    // GUARDAR 5 REGISTROS (FILAS VERDES PERMANENTES) ✅
+    // GUARDAR 5 REGISTROS + AUTO-CLOSE MODAL
     // ==========================================
     async function guardar5RegistrosAuto() {
         for (let i = 0; i < filasPendientesGuardar.length; i++) {
@@ -501,9 +615,10 @@
 
                 if (btnGuardar) {
                     btnGuardar.click();
-                    await esperar(1500);
+                    await esperar(2000);
 
-                    // ✅ LAS FILAS SE QUEDAN VERDES PERMANENTEMENTE
+                    // 🔹 Cerrar modal de confirmación si aparece
+                    await cerrarModalConfirmacion();
                 }
             } catch (e) {
                 console.error('Error guardando:', e);
@@ -514,6 +629,9 @@
 
         filasPendientesGuardar = [];
         await esperar(500);
+
+        // 🔹 Cerrar modal final después de guardar todos
+        await cerrarModalConfirmacion();
     }
 
     // ==========================================
@@ -570,7 +688,7 @@
     }
 
     // ==========================================
-    // FINALIZAR - CON LIMPIEZA DE PORTAPAPELES ✅
+    // FINALIZAR
     // ==========================================
     function finalizarImportacionAuto() {
         autoPaginacionActiva = false;
@@ -580,14 +698,12 @@
 
         setTimeout(() => {
             showToast(`✅ COMPLETADO: ${contadorMigrados} migrados, ${contadorNoMigrados} no migrados`, 'success');
-
-            // 🔐 LIMPIAR PORTAPAPELES POR SEGURIDAD
             limpiarPortapapeles();
         }, 500);
     }
 
     // ==========================================
-    // LIMPIAR PORTAPAPELES - NUEVA FUNCIÓN 🔐
+    // LIMPIAR PORTAPAPELES
     // ==========================================
     async function limpiarPortapapeles() {
         try {
@@ -627,6 +743,9 @@
             btnIniciar.style.display = 'block';
             btnIniciar.disabled = false;
             btnIniciar.textContent = '▶️ NUEVA IMPORTACIÓN';
+            // ✅ Mantener estilo warning al reiniciar
+            btnIniciar.style.background = '#ffc107';
+            btnIniciar.style.color = '#212529';
         }
 
         showToast('🧹 Limpieza completada', 'success');
