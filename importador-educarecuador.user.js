@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Importar Calificaciones - Educarecuador (Bootstrap Professional)
 // @namespace    http://tampermonkey.net/
-// @version      19.2
-// @description  Importar automático - Header Gris + Botón Warning Bootstrap + Auto-Close Modal
+// @version      20.5
+// @description  Importar automático - Búsqueda global por página + Sin toasts distractores + Optimizado + Modal externo oculto permanente + Limpieza final + Refresh al finalizar
 // @author       Tú
 // @match        https://academico.educarecuador.gob.ec/*
 // @match        *://*.educarecuador.gob.ec/*
@@ -13,7 +13,7 @@
 (function() {
     'use strict';
 
-    console.log('🚀 Script v19.2 - Header Gris + Botón Warning Bootstrap');
+    console.log('🚀 Script v20.5 - Optimizado + Toasts selectivos + Modal externo oculto permanente + Limpieza final + Refresh automático');
 
     // ==========================================
     // VARIABLES GLOBALES
@@ -28,45 +28,208 @@
     let contadorMigrados = 0;
     let contadorNoMigrados = 0;
     let datosInternos = null;
+    let calificacionesProcesadas = new Set();
+
+    // ==========================================
+    // 🔹 INYECTAR CSS PARA OCULTAR MODAL EXTERNO (PERMANENTE)
+    // ==========================================
+    function inyectarCSSEstil() {
+        if (document.getElementById('estilo-ocultar-modal-externo')) return;
+
+        const estilo = document.createElement('style');
+        estilo.id = 'estilo-ocultar-modal-externo';
+        estilo.textContent = `
+            /* Ocultar elementos que contengan texto de guardado */
+            .modal-guardado, [class*="guardado"], [class*="saved"],
+            div.modal-content:has-text("DATOS GUARDADOS"),
+            div.alert:has-text("GUARDADO"),
+            .toast:has-text("GUARDADO") {
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+                pointer-events: none !important;
+            }
+        `;
+        document.head.appendChild(estilo);
+        console.log('🎨 CSS inyectado para ocultar modal externo');
+    }
+
+    // ==========================================
+    // 🔹 OBSERVER PARA OCULTAR MODAL DINÁMICO
+    // ==========================================
+    function iniciarObserverModal() {
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType === 1) {
+                        ocultarSiEsModalGuardado(node);
+                        node.querySelectorAll?.('div, .modal, .alert, .toast, [role="dialog"]').forEach(el => {
+                            ocultarSiEsModalGuardado(el);
+                        });
+                    }
+                });
+            });
+        });
+
+        observer.observe(document.body, { childList: true, subtree: true });
+        console.log('👁️ Observer iniciado para detectar modales dinámicos');
+    }
+
+    // ==========================================
+    // 🔹 OCULTAR ELEMENTO SI CONTIENE TEXTO DE GUARDADO
+    // ==========================================
+    function ocultarSiEsModalGuardado(elemento) {
+        if (!elemento || !elemento.textContent) return;
+
+        const texto = elemento.textContent.toLowerCase();
+        const esModalGuardado =
+            texto.includes('datos guardados') ||
+            texto.includes('guardado correctamente') ||
+            texto.includes('registro guardado') ||
+            texto.includes('saved successfully') ||
+            texto.includes('éxito al guardar') ||
+            texto.includes('almacenado');
+
+        if (esModalGuardado && elemento.offsetParent !== null) {
+            if (!elemento.dataset.modalOculto) {
+                elemento.dataset.modalOculto = 'true';
+                elemento.dataset.originalDisplay = elemento.style.display || '';
+                elemento.style.display = 'none';
+                elemento.style.visibility = 'hidden';
+                elemento.style.opacity = '0';
+                elemento.setAttribute('aria-hidden', 'true');
+                console.log('👻 Modal externo ocultado en tiempo real:', elemento.tagName);
+            }
+        }
+    }
 
     // ==========================================
     // 🔹 FUNCIÓN AUXILIAR: COMPARAR CÉDULAS
     // ==========================================
     function compararCedulas(cedulaBuscada, textoCelda) {
         if (!cedulaBuscada || !textoCelda) return false;
-
         const a = cedulaBuscada.toString().replace(/\s+/g, '').trim();
         const b = textoCelda.toString().replace(/\s+/g, '').trim();
-
-        return a === b && a.length >= 10 && /^\d+[\d\.\-]*$/.test(a);
+        return a === b;
     }
 
     // ==========================================
-    // 🔹 CERRAR MODAL DE CONFIRMACIÓN AUTOMÁTICAMENTE
+    // 🔹 CERRAR/OCULTAR MODAL EXTERNO (MODO FANTASMA)
     // ==========================================
     async function cerrarModalConfirmacion() {
         try {
-            await esperar(500);
+            await esperar(150);
 
-            const btnAceptar = Array.from(document.querySelectorAll('button')).find(btn =>
-                (btn.textContent.trim() === 'Aceptar' ||
-                 btn.textContent.trim() === 'OK' ||
-                 btn.textContent.trim() === 'Cerrar') &&
-                btn.offsetParent !== null
-            );
+            const btnAceptar = Array.from(document.querySelectorAll('button')).find(btn => {
+                const txt = btn.textContent.trim().toLowerCase();
+                const visible = btn.offsetParent !== null;
+                return visible && (txt === 'aceptar' || txt === 'ok' || txt === 'cerrar' || txt === 'listo');
+            });
 
             if (btnAceptar) {
-                console.log('✅ Modal detectado - Cerrando automáticamente...');
                 btnAceptar.click();
-                await esperar(300);
-                return true;
+                await esperar(100);
             }
 
-            return false;
+            const elementosAEsconder = Array.from(document.querySelectorAll(
+                'div.modal, .alert, .toast, [role="dialog"], div[class*="modal"], ' +
+                'div[class*="alert"], div[class*="toast"], .modal-dialog, .modal-content'
+            )).filter(el => {
+                const texto = el.textContent.toLowerCase();
+                const visible = el.offsetParent !== null &&
+                               !el.matches('[style*="display: none"]') &&
+                               !el.matches('[style*="visibility: hidden"]');
+                return visible && (
+                    texto.includes('datos guardados') ||
+                    texto.includes('guardado correctamente') ||
+                    texto.includes('registro guardado') ||
+                    texto.includes('saved successfully') ||
+                    texto.includes('éxito al guardar')
+                );
+            });
+
+            elementosAEsconder.forEach(el => {
+                if (!el.dataset.originalDisplay) {
+                    el.dataset.originalDisplay = el.style.display || '';
+                    el.dataset.originalVisibility = el.style.visibility || '';
+                    el.dataset.originalOpacity = el.style.opacity || '';
+                }
+                el.style.display = 'none';
+                el.style.visibility = 'hidden';
+                el.style.opacity = '0';
+                el.setAttribute('aria-hidden', 'true');
+            });
+
+            const toastsGuardado = Array.from(document.querySelectorAll('.toast, .alert, [class*="toast"], [class*="alert"]')).filter(el => {
+                return el.textContent.toLowerCase().includes('guardado') &&
+                       el.offsetParent !== null;
+            });
+            toastsGuardado.forEach(el => {
+                if (!el.dataset.originalDisplay) {
+                    el.dataset.originalDisplay = el.style.display || '';
+                }
+                el.style.display = 'none';
+            });
+
+            return elementosAEsconder.length > 0 || toastsGuardado.length > 0;
+
         } catch (e) {
-            console.warn('⚠️ Error cerrando modal:', e);
+            console.warn('⚠️ Error ocultando modal externo (no crítico):', e);
             return false;
         }
+    }
+
+    // ==========================================
+    // 🔹 LIMPIEZA FINAL REFORZADA DE MODALES (NUEVO)
+    // ==========================================
+    async function limpiezaFinalModales() {
+        console.log('🧹 Ejecutando limpieza final de modales...');
+
+        await esperar(500);
+
+        const btnFinal = Array.from(document.querySelectorAll('button')).find(btn => {
+            const txt = btn.textContent.trim().toLowerCase();
+            const visible = btn.offsetParent !== null;
+            return visible && (txt === 'aceptar' || txt === 'ok' || txt === 'cerrar' || txt === 'listo' || txt === 'continuar');
+        });
+
+        if (btnFinal) {
+            btnFinal.click();
+            console.log('✅ Botón final clickeado');
+            await esperar(200);
+        }
+
+        const todosElementos = Array.from(document.querySelectorAll(
+            'div.modal, .alert, .toast, [role="dialog"], div[class*="modal"], ' +
+            'div[class*="alert"], div[class*="toast"], .modal-dialog, .modal-content, ' +
+            '.modal-backdrop, .fade.show'
+        ));
+
+        todosElementos.forEach(el => {
+            const texto = el.textContent.toLowerCase();
+            if (texto.includes('guardado') ||
+                texto.includes('datos') ||
+                texto.includes('éxito') ||
+                texto.includes('exito') ||
+                texto.includes('saved') ||
+                texto.includes('correctamente')) {
+
+                if (el.offsetParent !== null) {
+                    el.style.display = 'none';
+                    el.style.visibility = 'hidden';
+                    el.style.opacity = '0';
+                    el.setAttribute('aria-hidden', 'true');
+                    console.log('👻 Modal final ocultado:', el.tagName);
+                }
+            }
+        });
+
+        document.querySelectorAll('.modal-backdrop, .backdrop').forEach(backdrop => {
+            backdrop.style.display = 'none';
+            backdrop.remove();
+        });
+
+        console.log('✅ Limpieza final completada');
     }
 
     // ==========================================
@@ -76,30 +239,21 @@
         const panel = document.getElementById('importador-educarecuador');
         const header = document.getElementById('panelHeader');
         if (!panel || !header) return;
-
-        let isDragging = false;
-        let startX, startY, initialLeft, initialTop;
-
+        let isDragging = false, startX, startY, initialLeft, initialTop;
         header.addEventListener('mousedown', function(e) {
             isDragging = true;
-            startX = e.clientX;
-            startY = e.clientY;
+            startX = e.clientX; startY = e.clientY;
             const rect = panel.getBoundingClientRect();
-            initialLeft = rect.left;
-            initialTop = rect.top;
+            initialLeft = rect.left; initialTop = rect.top;
             panel.style.cursor = 'grabbing';
             e.preventDefault();
         });
-
         document.addEventListener('mousemove', function(e) {
             if (!isDragging) return;
-            const deltaX = e.clientX - startX;
-            const deltaY = e.clientY - startY;
-            panel.style.left = (initialLeft + deltaX) + 'px';
-            panel.style.top = (initialTop + deltaY) + 'px';
+            panel.style.left = (initialLeft + e.clientX - startX) + 'px';
+            panel.style.top = (initialTop + e.clientY - startY) + 'px';
             panel.style.right = 'auto';
         });
-
         document.addEventListener('mouseup', function() {
             isDragging = false;
             panel.style.cursor = 'default';
@@ -111,31 +265,23 @@
     // ==========================================
     function crearBotonFlotante() {
         if (document.getElementById('importador-educarecuador')) return;
-
         const container = document.createElement('div');
         container.id = 'importador-educarecuador';
         container.style.cssText = 'position: fixed; top: 100px; right: 20px; z-index: 99999;';
-
         container.innerHTML = `
             <div style="
-                background: #C8C8C8;
-                border: 1px solid #dee2e6;
-                border-radius: 8px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                color: #212529; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                background: #C8C8C8; border: 1px solid #dee2e6; border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1); color: #212529;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
                 min-width: 420px; max-width: 470px;
             ">
-                <!-- HEADER - Bootstrap Secondary (Gris) -->
                 <div id="panelHeader" style="
                     display: flex; justify-content: space-between; align-items: center;
-                    padding: 12px 16px;
-                    background: #adb5bd;
-                    color: white;
-                    border-radius: 8px 8px 0 0;
-                    cursor: move;
+                    padding: 12px 16px; background: #adb5bd; color: white;
+                    border-radius: 8px 8px 0 0; cursor: move;
                 ">
                     <h3 style="margin: 0; font-size: 16px; font-weight: 600; user-select: none; color: white;">
-                        📊 Importador de Calificaciones
+                       🚀 Importador de Calificaciones
                     </h3>
                     <div style="display:flex;gap:6px;">
                         <button id="btnReset" title="Limpiar" style="
@@ -152,68 +298,46 @@
                             onmouseout="this.style.background='rgba(255,255,255,0.2)'">×</button>
                     </div>
                 </div>
-
-                <!-- BODY -->
                 <div style="padding: 20px;">
-                    <!-- Info Box - Bootstrap Info -->
                     <div style="
-                        background: #fafafa;
-                        border: 1px solid #9ec5fe;
-                        border-left: 4px solid #adb5bd;
-                        padding: 12px; border-radius: 6px;
-                        margin-bottom: 16px; font-size: 13px; line-height: 1.6;
-                        color: #055160;
+                        background: #fafafa; border: 1px solid #9ec5fe; border-left: 4px solid #adb5bd;
+                        padding: 12px; border-radius: 6px; margin-bottom: 16px;
+                        font-size: 13px; line-height: 1.6; color: #055160;
                     ">
                         <strong style="color: #084298;">🔐 Modo Seguro:</strong><br>
                         1. Copie los datos de www.webprosistem.com<br>
-                        2. Haga clic en "▶️ INICIAR IMPORTACIÓN"<br>
+                        1. VERIFIQUE que se encuentre en el trimestre correspondiente<br>
+                        2. Haga clic en "▶ NICIAR IMPORTACIÓN"<br>
                         3. El script leerá directamente de su portapapeles<br>
                         <small style="opacity:0.85;">💡 Asegúrese de tener los datos copiados antes de iniciar</small>
                     </div>
-
-                    <!-- Botón Iniciar - Bootstrap Warning (Amarillo) -->
                     <button id="btnIniciarImport" style="
-                        width: 100%; padding: 12px;
-                        background: #ffc107;
-                        color: #212529; border: none; border-radius: 6px;
-                        font-weight: 600; font-size: 15px; cursor: pointer;
-                        margin-bottom: 10px;
-                        transition: all 0.2s;
+                        width: 100%; padding: 12px; background: #ffc107; color: #212529;
+                        border: none; border-radius: 6px; font-weight: 600; font-size: 15px;
+                        cursor: pointer; margin-bottom: 10px; transition: all 0.2s;
                         box-shadow: 0 2px 4px rgba(255,193,7,0.2);"
                         onmouseover="this.style.background='#ffca2c'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 8px rgba(255,193,7,0.3)'"
                         onmouseout="this.style.background='#ffc107'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 4px rgba(255,193,7,0.2)'">
-                        ▶️ INICIAR IMPORTACIÓN
+                        ▶ INICIAR IMPORTACIÓN
                     </button>
-
-                    <!-- Botón Continuar - Bootstrap Primary -->
                     <button id="btnContinuar" style="
-                        width: 100%; padding: 12px;
-                        background: #0d6efd;
-                        color: white; border: none; border-radius: 6px;
-                        font-weight: 600; font-size: 15px; cursor: pointer;
-                        margin-bottom: 10px; display: none;
-                        transition: all 0.2s;
-                        box-shadow: 0 2px 4px rgba(13,110,253,0.2);"
+                        width: 100%; padding: 12px; background: #0d6efd; color: white;
+                        border: none; border-radius: 6px; font-weight: 600; font-size: 15px;
+                        cursor: pointer; margin-bottom: 10px; display: none;
+                        transition: all 0.2s; box-shadow: 0 2px 4px rgba(13,110,253,0.2);"
                         onmouseover="this.style.background='#0b5ed7'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 8px rgba(13,110,253,0.3)'"
                         onmouseout="this.style.background='#0d6efd'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 4px rgba(13,110,253,0.2)'">
-                        ⏭️ CONTINUAR
+                        ⏭ CONTINUAR
                     </button>
-
-                    <!-- Botón Finalizar - Bootstrap Danger -->
                     <button id="btnFinalizar" style="
-                        width: 100%; padding: 12px;
-                        background: #dc3545;
-                        color: white; border: none; border-radius: 6px;
-                        font-weight: 600; font-size: 15px; cursor: pointer;
-                        margin-bottom: 10px; display: none;
-                        transition: all 0.2s;
-                        box-shadow: 0 2px 4px rgba(220,53,69,0.2);"
+                        width: 100%; padding: 12px; background: #dc3545; color: white;
+                        border: none; border-radius: 6px; font-weight: 600; font-size: 15px;
+                        cursor: pointer; margin-bottom: 10px; display: none;
+                        transition: all 0.2s; box-shadow: 0 2px 4px rgba(220,53,69,0.2);"
                         onmouseover="this.style.background='#bb2d3b'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 8px rgba(220,53,69,0.3)'"
                         onmouseout="this.style.background='#dc3545'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 4px rgba(220,53,69,0.2)'">
-                        ✅ PROCESO FINALIZADO
+                        PROCESO FINALIZADO
                     </button>
-
-                    <!-- BARRA DE PROGRESO - Bootstrap Progress -->
                     <div id="progresoContainer" style="display: none; margin-top: 16px;">
                         <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:13px; font-weight:500; color:#495057;">
                             <span id="progresoTexto">Progreso...</span>
@@ -223,127 +347,65 @@
                             <div id="barraProgreso" style="width:0%;height:100%;background:linear-gradient(90deg, #198754 0%, #20c997 100%);transition:width 0.3s ease;"></div>
                         </div>
                     </div>
-
-                    <!-- INDICADOR DE ESTADO - Bootstrap Alerts -->
                     <div id="estadoContainer" style="
                         margin-top: 16px; padding: 12px; border-radius: 6px;
                         font-size: 14px; font-weight: 500; text-align: center;
-                        display: none; transition: all 0.3s ease;
-                        border: 1px solid transparent;
+                        display: none; transition: all 0.3s ease; border: 1px solid transparent;
                     ">
                         <span id="estadoTexto">Esperando...</span>
                     </div>
                 </div>
             </div>
         `;
-
         document.body.appendChild(container);
-
-        // Event listeners
-        const btnCerrar = document.getElementById('btnCerrarPanel');
-        if (btnCerrar) {
-            btnCerrar.onclick = function() {
-                console.log('🔴 Cerrando panel...');
-                procesoPausado = true;
-                autoPaginacionActiva = false;
-                cleanupRealizado = true;
-                container.remove();
-                showToast('Panel cerrado', 'info');
-            };
-        }
-
-        const btnReset = document.getElementById('btnReset');
-        if (btnReset) btnReset.onclick = forzarLimpieza;
-
-        const btnIniciar = document.getElementById('btnIniciarImport');
-        if (btnIniciar) btnIniciar.onclick = iniciarImportacionAuto;
-
-        const btnContinuar = document.getElementById('btnContinuar');
-        if (btnContinuar) btnContinuar.onclick = continuarProceso;
-
-        const btnFinalizar = document.getElementById('btnFinalizar');
-        if (btnFinalizar) btnFinalizar.onclick = forzarLimpieza;
-
-        setTimeout(() => {
-            hacerArrastrable();
-        }, 300);
-
-        showToast('✅ Panel listo - Copie datos antes de iniciar', 'success');
+        document.getElementById('btnCerrarPanel').onclick = function() {
+            procesoPausado = true; autoPaginacionActiva = false; cleanupRealizado = true;
+            container.remove();
+        };
+        document.getElementById('btnReset').onclick = forzarLimpieza;
+        document.getElementById('btnIniciarImport').onclick = iniciarImportacionAuto;
+        document.getElementById('btnContinuar').onclick = continuarProceso;
+        // 🔹 MODIFICADO: Ahora hace refresh después de limpiar
+        document.getElementById('btnFinalizar').onclick = function() {
+            forzarLimpieza(true); // true = con refresh
+        };
+        setTimeout(hacerArrastrable, 300);
     }
 
     // ==========================================
-    // TOAST NOTIFICATION - Bootstrap Colors
+    // TOAST NOTIFICATION - Bootstrap Colors (SOLO PARA ERRORES DE ESTUDIANTE)
     // ==========================================
-    function showToast(mensaje, tipo = 'info') {
-        const toast = document.createElement('div');
+    function showToast(mensaje, tipo = 'error') {
+        if (tipo !== 'error' || !mensaje.includes('NO MIGRADO')) return;
 
+        const toast = document.createElement('div');
         const existingToasts = document.querySelectorAll('.toast-nm');
         const topOffset = 20 + (existingToasts.length * 65);
-
         toast.className = 'toast-nm';
 
-        let bgColor, borderColor, textColor, icon;
-
-        switch(tipo) {
-            case 'success':
-                bgColor = '#d1e7dd';
-                borderColor = '#badbcc';
-                textColor = '#0f5132';
-                icon = '✅';
-                break;
-            case 'error':
-                bgColor = '#f8d7da';
-                borderColor = '#f5c2c7';
-                textColor = '#842029';
-                icon = '❌';
-                break;
-            case 'warning':
-                bgColor = '#fff3cd';
-                borderColor = '#ffecb5';
-                textColor = '#664d03';
-                icon = '⚠️';
-                break;
-            default:
-                bgColor = '#cff4fc';
-                borderColor = '#b6effb';
-                textColor = '#055160';
-                icon = 'ℹ️';
-        }
+        const bgColor = '#f8d7da', borderColor = '#f5c2c7', textColor = '#842029', icon = '❌';
 
         toast.style.cssText = `
-            position: fixed; top: ${topOffset}px; right: 20px;
-            z-index: 100000; padding: 14px 20px; border-radius: 8px;
-            background: ${bgColor};
-            border: 1px solid ${borderColor};
-            color: ${textColor};
-            font-weight: 500; font-size: 14px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            position: fixed; top: ${topOffset}px; right: 20px; z-index: 100000;
+            padding: 14px 20px; border-radius: 8px; background: ${bgColor};
+            border: 1px solid ${borderColor}; color: ${textColor};
+            font-weight: 500; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             transition: all 0.3s ease; opacity: 0; transform: translateX(50px);
-            max-width: 380px; word-wrap: break-word;
-            display: flex; align-items: center; gap: 10px;
+            max-width: 380px; word-wrap: break-word; display: flex; align-items: center; gap: 10px;
         `;
-
         toast.innerHTML = `<span style="font-size:18px;">${icon}</span><span>${mensaje}</span>`;
         document.body.appendChild(toast);
-
         requestAnimationFrame(() => {
-            toast.style.opacity = '1';
-            toast.style.transform = 'translateX(0)';
+            toast.style.opacity = '1'; toast.style.transform = 'translateX(0)';
         });
-
         setTimeout(() => {
-            toast.style.opacity = '0';
-            toast.style.transform = 'translateX(50px)';
-            setTimeout(() => {
-                toast.remove();
-                reajustarToasts();
-            }, 300);
+            toast.style.opacity = '0'; toast.style.transform = 'translateX(50px)';
+            setTimeout(() => { toast.remove(); reajustarToasts(); }, 300);
         }, 4000);
     }
 
     function reajustarToasts() {
-        const toasts = document.querySelectorAll('.toast-nm');
-        toasts.forEach((toast, index) => {
+        document.querySelectorAll('.toast-nm').forEach((toast, index) => {
             toast.style.top = (20 + index * 65) + 'px';
         });
     }
@@ -354,48 +416,21 @@
     function actualizarEstado(mensaje, tipo) {
         const estadoContainer = document.getElementById('estadoContainer');
         const estadoTexto = document.getElementById('estadoTexto');
-
         if (!estadoContainer || !estadoTexto) return;
-
         estadoContainer.style.display = 'block';
         estadoTexto.textContent = mensaje;
-
-        switch(tipo) {
-            case 'escribiendo':
-                estadoContainer.style.background = '#fff3cd';
-                estadoContainer.style.borderColor = '#ffecb5';
-                estadoContainer.style.color = '#664d03';
-                break;
-            case 'guardando':
-                estadoContainer.style.background = '#cfe2ff';
-                estadoContainer.style.borderColor = '#9ec5fe';
-                estadoContainer.style.color = '#084298';
-                break;
-            case 'navegando':
-                estadoContainer.style.background = '#e2e3e5';
-                estadoContainer.style.borderColor = '#d3d6d8';
-                estadoContainer.style.color = '#41464b';
-                break;
-            case 'success':
-                estadoContainer.style.background = '#d1e7dd';
-                estadoContainer.style.borderColor = '#badbcc';
-                estadoContainer.style.color = '#0f5132';
-                break;
-            case 'error':
-                estadoContainer.style.background = '#f8d7da';
-                estadoContainer.style.borderColor = '#f5c2c7';
-                estadoContainer.style.color = '#842029';
-                break;
-            case 'warning':
-                estadoContainer.style.background = '#fff3cd';
-                estadoContainer.style.borderColor = '#ffecb5';
-                estadoContainer.style.color = '#664d03';
-                break;
-            default:
-                estadoContainer.style.background = '#e9ecef';
-                estadoContainer.style.borderColor = '#dee2e6';
-                estadoContainer.style.color = '#495057';
-        }
+        const styles = {
+            'escribiendo': {bg:'#fff3cd',bc:'#ffecb5',c:'#664d03'},
+            'guardando': {bg:'#cfe2ff',bc:'#9ec5fe',c:'#084298'},
+            'navegando': {bg:'#e2e3e5',bc:'#d3d6d8',c:'#41464b'},
+            'success': {bg:'#d1e7dd',bc:'#badbcc',c:'#0f5132'},
+            'error': {bg:'#f8d7da',bc:'#f5c2c7',c:'#842029'},
+            'warning': {bg:'#fff3cd',bc:'#ffecb5',c:'#664d03'}
+        };
+        const s = styles[tipo] || {bg:'#e9ecef',bc:'#dee2e6',c:'#495057'};
+        estadoContainer.style.background = s.bg;
+        estadoContainer.style.borderColor = s.bc;
+        estadoContainer.style.color = s.c;
     }
 
     // ==========================================
@@ -406,9 +441,7 @@
         const barra = document.getElementById('barraProgreso');
         const texto = document.getElementById('progresoTexto');
         const porcentaje = document.getElementById('progresoPorcentaje');
-
         if (!container || !barra) return;
-
         container.style.display = 'block';
         const pct = Math.round((actual / total) * 100);
         barra.style.width = pct + '%';
@@ -421,52 +454,28 @@
     // ==========================================
     async function iniciarImportacionAuto() {
         let texto = '';
-
         try {
-            if (navigator.clipboard && navigator.clipboard.readText) {
-                texto = await navigator.clipboard.readText();
-                console.log('🔐 Datos leídos directamente del portapapeles');
-            }
-        } catch (e) {
-            console.log('⚠️ No se pudo leer del portapapeles:', e.message);
-        }
-
+            if (navigator.clipboard?.readText) texto = await navigator.clipboard.readText();
+        } catch (e) { console.log('⚠️ No se pudo leer del portapapeles:', e.message); }
         if (!texto || texto.trim() === '') {
             showToast('❌ Copie las calificaciones de www.webprosistem.com antes de iniciar', 'error');
             return;
         }
+        try { calificaciones = JSON.parse(texto); }
+        catch (e) { showToast('❌ Error JSON: ' + e.message, 'error'); return; }
+        if (!calificaciones?.length) { showToast('❌ No hay datos', 'error'); return; }
+        if (!calificaciones[0].cedula) { showToast('❌ Falta campo "cedula"', 'error'); return; }
 
-        try {
-            calificaciones = JSON.parse(texto);
-        } catch (e) {
-            showToast('❌ Error JSON: ' + e.message, 'error');
-            return;
-        }
-
-        if (!calificaciones || calificaciones.length === 0) {
-            showToast('❌ No hay datos', 'error');
-            return;
-        }
-        if (!calificaciones[0].cedula) {
-            showToast('❌ Falta campo "cedula"', 'error');
-            return;
-        }
-
-        // Normalizar cédulas al cargar
         calificaciones = calificaciones.map(est => ({
             ...est,
             cedula: (est.cedula || '').toString().replace(/\s+/g, ''),
             id: (est.id || '').toString().replace(/\s+/g, '')
         }));
 
-        indiceActual = 0;
-        paginaActual = 1;
-        procesoPausado = false;
-        autoPaginacionActiva = true;
-        cleanupRealizado = false;
-        filasPendientesGuardar = [];
-        contadorMigrados = 0;
-        contadorNoMigrados = 0;
+        indiceActual = 0; paginaActual = 1; procesoPausado = false;
+        autoPaginacionActiva = true; cleanupRealizado = false;
+        filasPendientesGuardar = []; contadorMigrados = 0; contadorNoMigrados = 0;
+        calificacionesProcesadas.clear();
 
         document.getElementById('btnIniciarImport').style.display = 'none';
         document.getElementById('btnContinuar').style.display = 'none';
@@ -476,161 +485,117 @@
         actualizarBarraProgreso(0, calificaciones.length);
         actualizarEstado('🔐 Datos cargados - Iniciando...', 'escribiendo');
 
-        showToast(`🚀 Iniciando: ${calificaciones.length} registros`, 'info');
-
-        await procesarLoteAuto();
+        await procesarPaginaActual();
     }
 
     // ==========================================
-    // PROCESAR LOTE AUTOMÁTICO
+    // 🔹 PROCESAR PÁGINA ACTUAL (BUSQUEDA GLOBAL)
     // ==========================================
-    async function procesarLoteAuto() {
-        const loteSize = 5;
-        const finLote = Math.min(indiceActual + loteSize, calificaciones.length);
-
-        filasPendientesGuardar = [];
-
-        try {
-            actualizarEstado('✏️ Escribiendo notas...', 'escribiendo');
-
-            for (let i = indiceActual; i < finLote; i++) {
-                if (procesoPausado) return;
-
-                const est = calificaciones[i];
-                const cedula = est.cedula || est.id;
-
-                try {
-                    const resultado = await escribirNota(est);
-                    if (resultado.exito) {
-                        filasPendientesGuardar.push(resultado.fila);
-                        contadorMigrados++;
-                    } else {
-                        contadorNoMigrados++;
-                        showToast(`❌ NO MIGRADO: ${est.estudiante || cedula}`, 'error');
-                    }
-                } catch (e) {
-                    console.error('Error escribiendo:', e);
-                    contadorNoMigrados++;
-                    showToast(`❌ NO MIGRADO: ${est.estudiante || cedula}`, 'error');
-                }
-
-                indiceActual++;
-                actualizarBarraProgreso(indiceActual, calificaciones.length);
-                await esperar(300);
-            }
-
-            if (filasPendientesGuardar.length > 0) {
-                actualizarEstado('💾 Guardando registros...', 'guardando');
-                await guardar5RegistrosAuto();
-            }
-
-            if (indiceActual >= calificaciones.length) {
-                actualizarEstado('✅ ¡Completado!', 'success');
-                finalizarImportacionAuto();
-            } else {
-                await navegarPaginaSiguiente();
-            }
-
-        } catch (error) {
-            actualizarEstado('❌ Error: ' + error.message, 'error');
-            showToast('❌ Error: ' + error.message, 'error');
-            autoPaginacionActiva = false;
-        }
-    }
-
-    // ==========================================
-    // ESCRIBIR NOTA (CON RESALTADO BOOTSTRAP)
-    // ==========================================
-    async function escribirNota(estudiante) {
-        const cedulaBuscada = estudiante.cedula || estudiante.id;
+    async function procesarPaginaActual() {
         const filas = document.querySelectorAll('table tbody tr');
-        let filaEncontrada = null;
+        actualizarEstado('✏️ Escaneando página...', 'escribiendo');
 
         for (const fila of filas) {
+            if (procesoPausado) break;
             if (fila.style.display === 'none' || fila.hidden) continue;
 
-            const celdas = fila.querySelectorAll('td');
-            for (const td of celdas) {
-                const textoCelda = td.textContent.trim();
-
-                if (compararCedulas(cedulaBuscada, textoCelda)) {
-                    filaEncontrada = fila;
+            let cedulaEnFila = null;
+            for (const td of fila.querySelectorAll('td')) {
+                const texto = td.textContent.trim();
+                if (texto && /^\d{9,13}$/.test(texto.replace(/\D/g, ''))) {
+                    cedulaEnFila = texto.replace(/\D/g, '');
                     break;
                 }
             }
-            if (filaEncontrada) break;
+            if (!cedulaEnFila) continue;
+
+            for (let i = 0; i < calificaciones.length; i++) {
+                if (calificacionesProcesadas.has(i)) continue;
+                const est = calificaciones[i];
+                if (compararCedulas(est.cedula, cedulaEnFila)) {
+                    try {
+                        const resultado = await escribirNotaConFila(est, fila);
+                        if (resultado.exito) {
+                            filasPendientesGuardar.push(resultado.fila);
+                            calificacionesProcesadas.add(i);
+                            contadorMigrados++;
+                            actualizarBarraProgreso(calificacionesProcesadas.size, calificaciones.length);
+                        } else {
+                            contadorNoMigrados++;
+                            showToast(`❌ NO MIGRADO: ${est.estudiante || cedulaEnFila}`, 'error');
+                        }
+                    } catch (e) {
+                        console.error('Error procesando:', e);
+                        contadorNoMigrados++;
+                        showToast(`❌ NO MIGRADO: ${est.estudiante || cedulaEnFila}`, 'error');
+                    }
+                    break;
+                }
+            }
+            await esperar(150);
         }
 
-        if (!filaEncontrada) {
-            return { exito: false, fila: null };
+        if (filasPendientesGuardar.length > 0) {
+            actualizarEstado('💾 Guardando...', 'guardando');
+            await guardarRegistrosAuto();
         }
 
-        // 🟡 Bootstrap Warning color
-        filaEncontrada.style.background = '#fff3cd';
-        filaEncontrada.style.transition = 'background 0.3s ease';
+        if (calificacionesProcesadas.size >= calificaciones.length) {
+            actualizarEstado('✅ ¡Completado!', 'success');
+            finalizarImportacionAuto();
+        } else {
+            await navegarPaginaSiguiente();
+        }
+    }
 
-        const inputs = filaEncontrada.querySelectorAll('input[type="text"], input[type="number"]');
+    // ==========================================
+    // 🔹 ESCRIBIR NOTA CON FILA YA ENCONTRADA
+    // ==========================================
+    async function escribirNotaConFila(estudiante, fila) {
+        fila.style.background = '#fff3cd';
+        fila.style.transition = 'background 0.3s ease';
+        const inputs = fila.querySelectorAll('input[type="text"], input[type="number"]');
         let inputNota = inputs.length > 0 ? inputs[inputs.length - 1] : null;
+        if (!inputNota) { fila.style.background = ''; return { exito: false, fila: null }; }
 
-        if (!inputNota) {
-            filaEncontrada.style.background = '';
-            return { exito: false, fila: null };
-        }
-
-        inputNota.focus();
-        inputNota.value = '';
-        await esperar(100);
+        inputNota.focus(); inputNota.value = ''; await esperar(50);
 
         const notaStr = estudiante.nota.toString();
         for (const char of notaStr) {
             inputNota.value += char;
-            await esperar(25);
+            await esperar(15);
         }
 
         inputNota.dispatchEvent(new Event('input', { bubbles: true }));
         inputNota.dispatchEvent(new Event('change', { bubbles: true }));
         inputNota.dispatchEvent(new Event('blur', { bubbles: true }));
-
-        await esperar(200);
-
-        // ✅ Bootstrap Success color
-        filaEncontrada.style.background = '#d1e7dd';
-
-        return { exito: true, fila: filaEncontrada, nota: estudiante.nota };
+        await esperar(100);
+        fila.style.background = '#d1e7dd';
+        return { exito: true, fila: fila, nota: estudiante.nota };
     }
 
     // ==========================================
-    // GUARDAR 5 REGISTROS + AUTO-CLOSE MODAL
+    // 🔹 GUARDAR REGISTROS (GENÉRICO)
     // ==========================================
-    async function guardar5RegistrosAuto() {
+    async function guardarRegistrosAuto() {
         for (let i = 0; i < filasPendientesGuardar.length; i++) {
             const fila = filasPendientesGuardar[i];
-
             try {
                 const btnGuardar = fila.querySelector('button') ||
                                   Array.from(document.querySelectorAll('button')).find(b =>
                                       b.textContent.toLowerCase().includes('guardar') ||
                                       b.textContent.toLowerCase().includes('save')
                                   );
-
                 if (btnGuardar) {
                     btnGuardar.click();
-                    await esperar(2000);
-
-                    // 🔹 Cerrar modal de confirmación si aparece
+                    await esperar(1200);
                     await cerrarModalConfirmacion();
                 }
-            } catch (e) {
-                console.error('Error guardando:', e);
-            }
-
-            await esperar(400);
+            } catch (e) { console.error('Error guardando:', e); }
+            await esperar(200);
         }
-
         filasPendientesGuardar = [];
-        await esperar(500);
-
-        // 🔹 Cerrar modal final después de guardar todos
+        await esperar(300);
         await cerrarModalConfirmacion();
     }
 
@@ -639,34 +604,28 @@
     // ==========================================
     async function navegarPaginaSiguiente() {
         if (!autoPaginacionActiva) return;
-
         actualizarEstado('📄 Navegando página siguiente...', 'navegando');
-        await esperar(1000);
+        await esperar(500);
 
         let btnSiguiente = Array.from(document.querySelectorAll('button')).find(b =>
             b.textContent.toLowerCase().includes('siguiente') ||
             b.textContent.toLowerCase().includes('next') ||
             b.textContent.toLowerCase().includes('>')
         );
-
         if (!btnSiguiente) {
             btnSiguiente = document.querySelector('.pagination .next, .pagination-next, [aria-label="Next"]');
         }
 
         if (btnSiguiente && btnSiguiente.offsetParent !== null) {
             btnSiguiente.click();
-            await esperar(3000);
-
+            await esperar(1500);
             const filasNuevas = document.querySelectorAll('table tbody tr:not([style*="display:none"])');
             if (filasNuevas.length > 0) {
                 paginaActual++;
                 actualizarEstado(`✅ Página ${paginaActual} cargada`, 'success');
-                showToast(`📄 Página ${paginaActual}`, 'info');
-                await esperar(1000);
-                await procesarLoteAuto();
-            } else {
-                throw new Error('La tabla no se actualizó');
-            }
+                await esperar(500);
+                await procesarPaginaActual();
+            } else { throw new Error('La tabla no se actualizó'); }
         } else {
             actualizarEstado('⚠️ No hay más páginas', 'warning');
             document.getElementById('btnContinuar').style.display = 'block';
@@ -678,28 +637,24 @@
     // CONTINUAR MANUAL
     // ==========================================
     async function continuarProceso() {
-        procesoPausado = false;
-        autoPaginacionActiva = true;
+        procesoPausado = false; autoPaginacionActiva = true;
         document.getElementById('btnContinuar').style.display = 'none';
-
         actualizarEstado('▶️ Continuando...', 'escribiendo');
-        await esperar(1000);
-        await procesarLoteAuto();
+        await esperar(500);
+        await procesarPaginaActual();
     }
 
     // ==========================================
-    // FINALIZAR
+    // FINALIZAR (CON LIMPIEZA FINAL REFORZADA)
     // ==========================================
-    function finalizarImportacionAuto() {
+    async function finalizarImportacionAuto() {
         autoPaginacionActiva = false;
         procesoPausado = true;
-
         document.getElementById('btnFinalizar').style.display = 'block';
 
-        setTimeout(() => {
-            showToast(`✅ COMPLETADO: ${contadorMigrados} migrados, ${contadorNoMigrados} no migrados`, 'success');
-            limpiarPortapapeles();
-        }, 500);
+        await limpiezaFinalModales();
+
+        setTimeout(() => { limpiarPortapapeles(); }, 300);
     }
 
     // ==========================================
@@ -707,23 +662,19 @@
     // ==========================================
     async function limpiarPortapapeles() {
         try {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
+            if (navigator.clipboard?.writeText) {
                 await navigator.clipboard.writeText('');
                 console.log('🔐 Portapapeles limpiado por seguridad');
-                showToast('🔒 Portapapeles limpiado - Datos eliminados', 'warning');
             }
-        } catch (e) {
-            console.log('⚠️ No se pudo limpiar el portapapeles:', e.message);
-        }
+        } catch (e) { console.log('⚠️ No se pudo limpiar el portapapeles:', e.message); }
     }
 
     // ==========================================
-    // LIMPIEZA
+    // LIMPIEZA (CON REFRESH OPCIONAL)
     // ==========================================
-    function forzarLimpieza() {
+    function forzarLimpieza(conRefresh = false) {
         if (cleanupRealizado) return;
         cleanupRealizado = true;
-
         autoPaginacionActiva = false;
         procesoPausado = true;
         indiceActual = 0;
@@ -732,41 +683,52 @@
         contadorMigrados = 0;
         contadorNoMigrados = 0;
         datosInternos = null;
-
+        calificacionesProcesadas.clear();
         document.getElementById('progresoContainer').style.display = 'none';
         document.getElementById('estadoContainer').style.display = 'none';
         document.getElementById('btnContinuar').style.display = 'none';
         document.getElementById('btnFinalizar').style.display = 'none';
-
         const btnIniciar = document.getElementById('btnIniciarImport');
         if (btnIniciar) {
             btnIniciar.style.display = 'block';
             btnIniciar.disabled = false;
             btnIniciar.textContent = '▶️ NUEVA IMPORTACIÓN';
-            // ✅ Mantener estilo warning al reiniciar
             btnIniciar.style.background = '#ffc107';
             btnIniciar.style.color = '#212529';
         }
 
-        showToast('🧹 Limpieza completada', 'success');
+        // 🔹 REFRESH AUTOMÁTICO SI SE SOLICITA
+        if (conRefresh) {
+            console.log('🔄 Refresh de página en 1 segundo...');
+            actualizarEstado('🔄 Actualizando página...', 'success');
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        }
     }
 
     // ==========================================
     // UTILIDADES
     // ==========================================
-    function esperar(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
+    function esperar(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
     // ==========================================
     // INICIALIZAR
     // ==========================================
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
-            setTimeout(crearBotonFlotante, 2000);
+            setTimeout(() => {
+                inyectarCSSEstil();
+                iniciarObserverModal();
+                crearBotonFlotante();
+            }, 2000);
         });
     } else {
-        setTimeout(crearBotonFlotante, 2000);
+        setTimeout(() => {
+            inyectarCSSEstil();
+            iniciarObserverModal();
+            crearBotonFlotante();
+        }, 2000);
     }
 
 })();
