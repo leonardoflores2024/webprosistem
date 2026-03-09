@@ -4,7 +4,7 @@
 // @version      21.7
 // @description  Importar automático - Validación con coincidencia parcial flexible + Panel arrastrable
 // @author       Tú
-// @match        https://academico.educarecuador.gob.ec/*
+// @match        https://academico.educarecuador.gob.ec/  *
 // @match        *://*.educarecuador.gob.ec/*
 // @grant        none
 // @run-at       document-end
@@ -244,7 +244,7 @@
             initialTop = rect.top;
 
             panel.style.cursor = 'grabbing';
-            panel.style.right = 'auto'; // ✅ Importante: quitar right para usar left
+            panel.style.right = 'auto';
             panel.style.top = initialTop + 'px';
             panel.style.left = initialLeft + 'px';
 
@@ -260,7 +260,7 @@
 
             panel.style.left = (initialLeft + deltaX) + 'px';
             panel.style.top = (initialTop + deltaY) + 'px';
-            panel.style.right = 'auto'; // ✅ Asegurar que right no interfiera
+            panel.style.right = 'auto';
 
             e.preventDefault();
         });
@@ -272,7 +272,6 @@
             }
         });
 
-        // ✅ Cambiar cursor para indicar que es arrastrable
         header.style.cursor = 'move';
     }
 
@@ -324,7 +323,6 @@
         document.getElementById('btnContinuar').onclick = continuarProceso;
         document.getElementById('btnFinalizar').onclick = function() { forzarLimpieza(true); };
 
-        // ✅ Llamar a hacerArrastrable después de crear el panel
         setTimeout(hacerArrastrable, 100);
     }
 
@@ -553,9 +551,21 @@
     }
 
     // ==========================================
-    // 🔹 ESCRIBIR NOTA
+    // 🔹 ESCRIBIR NOTA ⭐ (CORREGIDO - LÓGICA SIMPLIFICADA)
     // ==========================================
     async function escribirNotaConFila(estudiante, fila) {
+        // ⭐ NUEVA LÓGICA: Solo migrar si nota > 0
+        if (estudiante.nota === null || 
+            estudiante.nota === undefined || 
+            estudiante.nota === '' || 
+            Number(estudiante.nota) <= 0) {
+            
+            console.log('⚪ Nota 0 o menor - NO se migra (casillero sin cambios)');
+            fila.style.background = '#d1e7dd';
+            return { exito: true, fila: fila };
+        }
+
+        // CÓDIGO ORIGINAL - SIN CAMBIOS (solo para notas > 0)
         fila.style.background = '#fff3cd';
         const inputs = fila.querySelectorAll('input[type="text"], input[type="number"]');
         let inputNota = inputs.length > 0 ? inputs[inputs.length - 1] : null;
