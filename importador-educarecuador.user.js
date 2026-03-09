@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Importar Calificaciones - Educarecuador (Coincidencia Flexible)
+// @name         Importar Calificaciones - Educarecuador
 // @namespace    http://tampermonkey.net/
 // @version      21.7
 // @description  Importar automático - Validación con coincidencia parcial flexible + Panel arrastrable
