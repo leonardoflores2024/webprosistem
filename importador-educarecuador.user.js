@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         Importar Calificaciones - Educarecuador
 // @namespace    http://tampermonkey.net/
-// @version      21.7
-// @description  Importar automático - Validación con coincidencia parcial flexible + Panel arrastrable
+// @version      21.8
+// @description  Importar automático - Validación con coincidencia parcial flexible + Panel arrastrable + Info visible
 // @author       Tú
-// @match        https://academico.educarecuador.gob.ec/  *
+// @match        https://academico.educarecuador.gob.ec/    *
 // @match        *://*.educarecuador.gob.ec/*
 // @grant        none
 // @run-at       document-end
@@ -13,7 +13,7 @@
 (function() {
     'use strict';
 
-    console.log('🚀 Script v21.7 - Panel arrastrable + Coincidencia flexible');
+    console.log('🚀 Script v21.8 - Panel arrastrable + Coincidencia flexible + Info visible');
 
     // ==========================================
     // VARIABLES GLOBALES
@@ -276,7 +276,7 @@
     }
 
     // ==========================================
-    // 🔹 CREAR PANEL
+    // 🔹 CREAR PANEL ⭐ ACTUALIZADO
     // ==========================================
     function crearBotonFlotante() {
         if (document.getElementById('importador-educarecuador')) return;
@@ -291,11 +291,15 @@
                 </div>
                 <div style="padding: 20px;">
                     <div style="background: #fafafa; border: 1px solid #9ec5fe; border-left: 4px solid #adb5bd; padding: 12px; border-radius: 6px; margin-bottom: 16px; font-size: 13px;">
-                        <strong>🔐 Modo Seguro:</strong><br>
-                        1. Copie calificaciones desde www.webprosistem.com<br>
-                        2. Click en "▶ INICIAR IMPORTACIÓN"<br>
+                        <strong>🔐 Acciones:</strong><br>
+                        1. Copie las calificaciones desde www.webprosistem.com<br>
+                        2. Inicie Sesión con sus credenciales <br>
+                        3. Aperture la asignatura, seleccione trimestre y edite registro<br>
+                        Trimestre: <span id="infoTrimestre"></span><br>
+                        Asignatura: <span id="infoAsignatura"></span>
                     </div>
-                    <button id="btnIniciarImport" style="width: 100%; padding: 12px; background: #ffc107; color: #212529; border: none; border-radius: 6px; font-weight: 600; font-size: 15px; cursor: pointer; margin-bottom: 10px;">▶ INICIAR IMPORTACIÓN</button>
+
+                    <button id="btnIniciarImport" style="width: 100%; padding: 12px; background: #ffc107; color: #212529; border: none; border-radius: 6px; font-weight: 600; font-size: 15px; cursor: pointer; margin-bottom: 10px;">▶ INICIAR COPIADO</button>
                     <button id="btnContinuar" style="width: 100%; padding: 12px; background: #0d6efd; color: white; border: none; border-radius: 6px; font-weight: 600; font-size: 15px; cursor: pointer; margin-bottom: 10px; display: none;">⏭ CONTINUAR</button>
                     <button id="btnFinalizar" style="width: 100%; padding: 12px; background: #dc3545; color: white; border: none; border-radius: 6px; font-weight: 600; font-size: 15px; cursor: pointer; margin-bottom: 10px; display: none;">PROCESO FINALIZADO</button>
                     <div id="progresoContainer" style="display: none; margin-top: 16px;">
@@ -373,6 +377,16 @@
     }
 
     // ==========================================
+    // 🔹 ACTUALIZAR INFO EN PANEL ⭐ NUEVA FUNCIÓN
+    // ==========================================
+    function actualizarInfoPanel(trimestre, asignatura) {
+        const triEl = document.getElementById('infoTrimestre');
+        const asigEl = document.getElementById('infoAsignatura');
+        if (triEl) triEl.textContent = trimestre || '—';
+        if (asigEl) asigEl.textContent = asignatura || '—';
+    }
+
+    // ==========================================
     // 🔹 VALIDAR ASIGNATURA
     // ==========================================
     function validarAsignaturaEstricta(asignaturaJSON, asignaturaPagina) {
@@ -397,7 +411,7 @@
     }
 
     // ==========================================
-    // 🔹 INICIAR IMPORTACIÓN
+    // 🔹 INICIAR IMPORTACIÓN ⭐ ACTUALIZADO
     // ==========================================
     async function iniciarImportacionAuto() {
         let texto = '';
@@ -445,6 +459,9 @@
         // Validar asignatura (COINCIDENCIA FLEXIBLE)
         asignaturaJSON = calificaciones[0].asignatura || '';
         asignaturaPagina = leerAsignaturaPagina();
+
+        // 👇 ACTUALIZAR PANEL CON LA INFO LEÍDA 👇
+        actualizarInfoPanel(trimestrePagina, asignaturaPagina);
 
         const validacionAsignatura = validarAsignaturaEstricta(asignaturaJSON, asignaturaPagina);
         if (!validacionAsignatura.valido) {
@@ -555,11 +572,11 @@
     // ==========================================
     async function escribirNotaConFila(estudiante, fila) {
         // ⭐ NUEVA LÓGICA: Solo migrar si nota > 0
-        if (estudiante.nota === null || 
-            estudiante.nota === undefined || 
-            estudiante.nota === '' || 
+        if (estudiante.nota === null ||
+            estudiante.nota === undefined ||
+            estudiante.nota === '' ||
             Number(estudiante.nota) <= 0) {
-            
+
             console.log('⚪ Nota 0 o menor - NO se migra (casillero sin cambios)');
             fila.style.background = '#d1e7dd';
             return { exito: true, fila: fila };
