@@ -295,8 +295,6 @@
                         1. Copie las calificaciones desde www.webprosistem.com<br>
                         2. Inicie Sesión con sus credenciales <br>
                         3. Aperture la asignatura, seleccione trimestre y edite registro<br>
-                        Trimestre: <span id="infoTrimestre"></span><br>
-                        Asignatura: <span id="infoAsignatura"></span>
                     </div>
 
                     <button id="btnIniciarImport" style="width: 100%; padding: 12px; background: #ffc107; color: #212529; border: none; border-radius: 6px; font-weight: 600; font-size: 15px; cursor: pointer; margin-bottom: 10px;">▶ INICIAR COPIADO</button>
